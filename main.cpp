@@ -8,6 +8,7 @@
 #include <vector>
 #include <format>
 #include <algorithm>
+#include <utility>
 
 using std::cerr;
 using std::cout;
@@ -15,6 +16,7 @@ using std::endl;
 using std::format;
 using std::string;
 using std::vector;
+using std::pair;
 
 vector<DWORD> enum_all_pids()
 {
@@ -46,15 +48,17 @@ vector<DWORD> enum_all_pids()
     return pids;
 }
 
-string collect_process_info(DWORD pid)
+auto collect_process_info(DWORD pid) -> pair<HANDLE, string>
 {
+    auto invalid = pair(nullptr, string());
+
     HANDLE handle = OpenProcess(
         PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, // [in] DWORD dwDesiredAccess,
         FALSE,                                       // [in] BOOL  bInheritHandle,
         pid                                          // [in] DWORD dwProcessId
     );
 
-    if (handle == NULL) return {};
+    if (handle == NULL) return invalid;
 
     DWORD buffer_size = 1024;
     auto buffer = string(buffer_size, 0);
@@ -72,11 +76,10 @@ string collect_process_info(DWORD pid)
     {
         cerr << format("ERROR: QueryFullProcessImageNameW failes ({})", GetLastError()) << endl;
         CloseHandle(handle);
-        return {};
+        return invalid;
     }
 
-    CloseHandle(handle);
-    return buffer;
+    return pair{ handle, buffer };
 }
 
 int main()
@@ -88,12 +91,12 @@ int main()
 
     // std::sort(pids.begin(), pids.end());
 
-    for (auto &pid : pids)
+    for (auto& pid : pids)
     {
         if (pid == 0 or pid == 4)
             continue;
 
-        auto info = collect_process_info(pid);
+        auto [handle, info] = collect_process_info(pid);
 
         cout << format("pid: {:<5} - {}", pid, info) << endl;
 
